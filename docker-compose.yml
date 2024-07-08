@@ -1,0 +1,17 @@
+version: '3'
+services:
+
+  flask: 
+    build: 
+      context: api
+      dockerfile: Dockerfile
+
+  nginx:
+    build:
+      context: nginx
+      dockerfile: Dockerfile
+    restart: always
+    depends_on:
+      - flask
+    ports:
+      - 8080:80
