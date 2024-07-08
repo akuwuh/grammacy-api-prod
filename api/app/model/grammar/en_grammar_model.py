@@ -27,11 +27,6 @@ class EnglishGrammarModel:
     def enforce(self, input_text):
         input_text = self.nlp(input_text)
 
-        # temporary prints for rule development
-        # please remove before deployment please please please?
-        for tok in input_text:
-            print(f'{tok.text, tok.tag_, tok.pos_, tok.dep_, tok.morph}, {tok.head.text, tok.head.tag_}')
-
         errors = []
         for rule in self.rules:
             if callable(rule):

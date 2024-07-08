@@ -1,17 +1,23 @@
-version: '3'
 services:
-
-  flask: 
-    build: 
-      context: api
+  flask:
+    build:
+      context: ./api
       dockerfile: Dockerfile
+    networks:
+      - app-network
 
   nginx:
     build:
-      context: nginx
+      context: ./nginx
       dockerfile: Dockerfile
     restart: always
     depends_on:
       - flask
     ports:
-      - 8080:80
+      - "80:80"
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge

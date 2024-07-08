@@ -2,6 +2,7 @@ from pathlib import Path
 import json
 
 from flask import Flask, request, jsonify
+from werkzeug.middleware.proxy_fix import ProxyFix
 import spacy
 import lemminflect
 from symspellpy import SymSpell
@@ -86,6 +87,10 @@ esm = EnglishSpellingModel(sym_spell)
 
 # models all loaded; start server and wait for requests
 app = Flask(__name__)
+
+app.wsgi_app = ProxyFix(
+    app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1
+)
 
 def clean_text(text):
     return text.rstrip().lstrip()
