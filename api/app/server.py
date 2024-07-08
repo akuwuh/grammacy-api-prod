@@ -3,14 +3,16 @@ import json
 
 from flask import Flask, request, jsonify
 from werkzeug.middleware.proxy_fix import ProxyFix
+
 import spacy
 import lemminflect
 from symspellpy import SymSpell
-
 from model.model import predict_errors
 
 from model.grammar.utils.get_forms import GetForms
 from model.grammar.en_grammar_model import EnglishGrammarModel
+from model.spelling.en_spelling_model import EnglishSpellingModel
+
 from model.grammar.rules.passive_active import check_passive_active
 from model.grammar.rules.sva import check_sva
 from model.grammar.rules.complete_sentence import check_complete_sentence
@@ -26,19 +28,20 @@ from model.grammar.rules.homophones import check_homophones
 from model.grammar.rules.prepositions import check_prepositions
 from model.grammar.rules.determiners import check_determiners
 
-from model.spelling.en_spelling_model import EnglishSpellingModel
-
+# just for ease of debugging
 BASE_DIR = Path(__file__).resolve(strict=True).parent
 
 # -----------------------------------------------------------
 #                LOAD GRAMMAR CHECKING MODEL
 # -----------------------------------------------------------
-# models are named english-vx.y where x is a different dataset and y is different hyperparameters
-# - v0: augmented OntoNotes 5.0; very little augmentations (very bad at SVA so v1 was created)
-# - v1: augmented OntoNotes 5.0 with SVA augmentations (better SVA but worse overall metrics)
-# - v2: augmented OntoNotes 5.0 + augmented GUM (this was just horrible data lol)
-# - v3: same data as v1, with unaugmented GUM (best metrics, but no morph features and a bit overfit)
-# - v4: augmented GUM (worst metrics, but best generalization and gives morph features. the current production model )
+# models are named english-vx.y where x = dataset version and y = training version
+# - v0: augmented OntoNotes 5.0
+# - v1: augmented OntoNotes 5.0
+# - v2: augmented OntoNotes 5.0 + unaugmented GUM 
+# - v3: augmented OntoNotes 5.0 + unaugmented GUM (more augmentations than v2)
+# - v4: augmented GUM
+# the model used in production is v4.11 (see model/grammar/english-v4.11-prod for training config and metrics)
+# GUM was used in the final model because it has more modern text and has morph feat data
 MODEL_VER = 'english-v4.11-prod'
 
 nlp = spacy.load(f'{BASE_DIR}/model/grammar/{MODEL_VER}')
@@ -85,9 +88,12 @@ sym_spell.load_bigram_dictionary(bigram_path, term_index=0, count_index=2)
 
 esm = EnglishSpellingModel(sym_spell)
 
-# models all loaded; start server and wait for requests
+# -----------------------------------------------------------
+#                FLASK APP
+# -----------------------------------------------------------
 app = Flask(__name__)
 
+# necessary for running behind Nginx reverse proxy
 app.wsgi_app = ProxyFix(
     app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1
 )
@@ -103,16 +109,23 @@ def index():
 def predict():
     payload = request.form.get('input')
 
-    if not payload:
+    # type checking
+    if type(payload) != str:
+        return {"error": "Input text must be a string."}
+    if payload is None:
         return {"error": "Input text is null."}
-    elif len(payload) > 256:
-        return {"error": "Input text is too long (must be <= 256 characters)."}
-    elif len(payload) == 0:
-        return {"error": "Input text is empty."}
     
     payload = clean_text(payload)
+    
+    # length checking (model is extremely efficient, but data transfer out of EC2 is expensive lol)
+    if len(payload) == 0:
+        return {"error": "Input text is empty."}
+    if len(payload) > 256:
+        return {"error": "Input text is too long."}
+    
     result = predict_errors(payload, egm, esm)
     return {"result": result}
 
+# for local testing. in production, Gunicorn is used to run the server (see Dockerfile)
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000)
