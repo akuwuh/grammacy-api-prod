@@ -8,7 +8,7 @@ services:
 
   nginx:
     image: nginx
-    restart: always
+    restart: unless-stopped
     depends_on:
       - flask
     ports:
@@ -28,7 +28,7 @@ services:
       - ./certbot/www:/var/www/certbot
     networks:
       - app-network
-    command: certonly --webroot -w /var/www/certbot --force-renewal --email taemin.kim0327@gmail.com -d grammacy.com -d www.grammacy.com --agree-tos
+    command: certonly --webroot -w /var/www/certbot --force-renewal --email taemin.kim0327@gmail.com -d api.grammacy.com --agree-tos
 
 # create a network called 'app-network'
 networks:
